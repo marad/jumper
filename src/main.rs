@@ -1,7 +1,8 @@
-use sqlx::{SqlitePool, Pool, Sqlite, FromRow, migrate::MigrateDatabase};
+mod store;
 use clap::{ Parser, Subcommand };
 use std::env;
 use anyhow::anyhow;
+use crate::store::Store;
 
 type Res<T> = anyhow::Result<T>;
 
@@ -55,6 +56,7 @@ async fn main() -> Res<()> {
 
 
 async fn save_current_path(store: &mut Store, name: Option<&str>) -> Res<()> {
+    // TODO: handle unique constraint error
     let current_dir = env::current_dir()?;
     let dir_name = current_dir.file_name().unwrap().to_str().unwrap();
     let save_name = name.unwrap_or(dir_name);
@@ -100,65 +102,3 @@ async fn remove_path(store: &mut Store, name: &str) -> Res<()> {
     Ok(())
 }
 
-#[derive(Clone, FromRow, Debug)]
-struct SavedPath {
-    name: String,
-    path: String,
-}
-
-
-#[derive(Debug)]
-struct Store {
-    pool: Pool<Sqlite>
-}
-
-impl Store {
-
-    async fn create(url: &str) -> Res<Store> {
-        if !Sqlite::database_exists(url).await.unwrap_or(false) {
-            Sqlite::create_database(url).await?;
-        }
-        let pool = SqlitePool::connect(url).await?;
-
-        sqlx::query("CREATE TABLE IF NOT EXISTS paths (
-                id INTEGER PRIMARY KEY NOT NULL,
-                name VARCHAR(50) UNIQUE NOT NULL,
-                path VARCHAR(500))")
-            .execute(&pool).await?;
-        return Ok(Store { pool });
-    }
-
-    async fn save(&mut self, name: &str, path: &str) -> Res<()> {
-        // TODO: handle unique constraint error
-        sqlx::query("INSERT INTO paths (name, path) VALUES (?, ?)")
-            .bind(name)
-            .bind(path)
-            .execute(&self.pool)
-            .await?;
-        Ok(())
-    }
-
-    async fn get(&mut self, name: &str) -> Res<String> {
-        let path = sqlx::query_as::<_, SavedPath>("SELECT name, path FROM paths WHERE name = ?")
-            .bind(name)
-            .fetch_one(&self.pool)
-            .await?;
-        Ok(path.path)
-    }
-
-
-    async fn list(&mut self) -> Res<Vec<SavedPath>> {
-        let data = sqlx::query_as::<_, SavedPath>("SELECT name, path FROM paths")
-            .fetch_all(&self.pool)
-            .await?;
-        Ok(data)
-    }
-
-    async fn remove(&mut self, name: &str) -> Res<()> {
-        sqlx::query("DELETE FROM paths where name = ?")
-            .bind(name)
-            .execute(&self.pool)
-            .await?;
-        Ok(())
-    }
-}
