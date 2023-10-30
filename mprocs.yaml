@@ -1,0 +1,5 @@
+procs:
+  nvim:
+    cmd: ["nvim"]
+  cmd:
+    shell: "pwsh.exe"

@@ -3,6 +3,7 @@ use clap::{ Parser, Subcommand };
 use std::env;
 use anyhow::anyhow;
 use crate::store::Store;
+use cli_table::{Cell, Table, format::{Border, Separator, Padding, Justify}, print_stdout};
 
 type Res<T> = anyhow::Result<T>;
 
@@ -17,16 +18,11 @@ struct Args {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    Save {
-        name: Option<String>,
-    },
-    Get {
-        name: String,
-    },
+    Save { name: Option<String>, },
+    Get { name: String, },
     List,
-    Remove {
-        name: String,
-    }
+    Remove { name: String, },
+    Test,
 }
 
 
@@ -37,6 +33,9 @@ async fn main() -> Res<()> {
     let mut store = Store::create("sqlite://test.db").await?;
 
     match args.command {
+        Commands::Test => {
+
+        }
         Commands::Save { name } => {
             save_current_path(&mut store, name.as_deref()).await?;
         }
@@ -56,12 +55,24 @@ async fn main() -> Res<()> {
 
 
 async fn save_current_path(store: &mut Store, name: Option<&str>) -> Res<()> {
-    // TODO: handle unique constraint error
     let current_dir = env::current_dir()?;
     let dir_name = current_dir.file_name().unwrap().to_str().unwrap();
     let save_name = name.unwrap_or(dir_name);
     let save_path = current_dir.to_str().unwrap();
-    store.save(save_name, save_path).await?;
+    match store.save(save_name, save_path).await {
+        Ok(_) => {
+        },
+        Err(err) => {
+            match err.downcast_ref::<sqlx::error::Error>() {
+                Some(sqlx::error::Error::Database(db_err)) if db_err.is_unique_violation() => {
+                    println!("Name '{}' is already used for another path.", save_name);
+                },
+                Some(_) | None => {
+                    return Err(err);
+                }
+            }
+        }
+    }
     return Ok(())
 }
 
@@ -86,12 +97,20 @@ async fn get_path(store: &mut Store, path_name: &str) -> Res<()> {
 }
 
 async fn list_paths(store: &mut Store) -> Res<()> {
-    // TODO: handle showing the table nicely with different name lengths
     let paths = store.list().await?;
-    
-    for path in paths {
-        println!("{}\t{}", path.name, path.path);
-    }
+
+    let data: Vec<_> = paths.iter().map(|it| {
+        vec![
+            it.name.clone().cell()
+                .justify(Justify::Left)
+                .padding(Padding::builder().build()),
+            it.path.clone().cell()]
+    }).collect();
+
+    let table = data.table()
+        .border(Border::builder().build())
+        .separator(Separator::builder().build());
+    let _ = print_stdout(table);
 
     Ok(())
 }
