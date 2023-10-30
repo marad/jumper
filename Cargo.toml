@@ -2,6 +2,12 @@
 name = "jumper"
 version = "0.1.0"
 edition = "2021"
+authors = ["Marcin Radoszewski <moriturius@gmail.com>"]
+description = "Jumper is command line utility to store and jump to folders on your system for blazingly fast workflow."
+readme = "README.md"
+homepage = "https://github.com/marad/jumper"
+license = "MIT"
+license-file = "LICENSE"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
