@@ -27,7 +27,7 @@ selected path you need to configure the shell. Below are the definitions of
 `jg` command that will perform the jump. When invoked without any argument
 it uses `fzf` to search for a path.
 
-*Windows Powershell*
+**Windows Powershell**
 
 Add this to your `$profile` file:
 
@@ -43,7 +43,7 @@ function Jump-Location {
 New-Alias jg Jump-Location
 ```
 
-*Bash*
+**Bash**
 
 Add this to your `~/.bashrc`:
 
