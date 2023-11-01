@@ -23,7 +23,9 @@ specific folder with `jumper get <name>`.
 ## Shell setup
 
 Jumper by itself is just a bookmarking tool. To be able to actually jump to
-selected path you need to configure the shell. Below are the 
+selected path you need to configure the shell. Below are the definitions of 
+`jg` command that will perform the jump. When invoked without any argument
+it uses `fzf` to search for a path.
 
 *Windows Powershell*
 
@@ -46,5 +48,14 @@ New-Alias jg Jump-Location
 Add this to your `~/.bashrc`:
 
 ```bash
-# soon (tm)
+jumpLocation() {
+    if [ -z "$@" ]; then
+        selected=$(jumper list | fzf --ansi | awk -F'|' '{gsub(/^\s+/, "", $2); print $2}')
+        cd $selected
+    else
+        selected=$(jumper get $@)
+        cd $selected
+    fi
+}
+alias jg="jumpLocation"
 ```
