@@ -1,41 +1,42 @@
 mod store;
-use clap::{ Parser, Subcommand };
-use std::env;
-use anyhow::anyhow;
 use crate::store::Store;
-use cli_table::{Cell, Table, format::{Border, Separator, Padding, Justify}, print_stdout};
+use anyhow::anyhow;
+use clap::{Parser, Subcommand};
+use cli_table::{
+    format::{Border, Justify, Padding, Separator},
+    print_stdout, Cell, Table,
+};
+use home::home_dir;
+use std::env;
+use std::fs;
 
 type Res<T> = anyhow::Result<T>;
-
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
     #[command(subcommand)]
     command: Commands,
-
 }
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    Save { name: Option<String>, },
-    Get { name: String, },
+    Save { name: Option<String> },
+    Get { name: String },
     List,
-    Remove { name: String, },
+    Remove { name: String },
     Test,
 }
-
 
 #[tokio::main]
 async fn main() -> Res<()> {
     let args = Args::parse();
 
-    let mut store = Store::create("sqlite://test.db").await?;
+    let db_path = get_db_path();
+    let mut store = Store::create(db_path.as_str()).await?;
 
     match args.command {
-        Commands::Test => {
-
-        }
+        Commands::Test => {}
         Commands::Save { name } => {
             save_current_path(&mut store, name.as_deref()).await?;
         }
@@ -53,6 +54,11 @@ async fn main() -> Res<()> {
     Ok(())
 }
 
+fn get_db_path() -> String {
+    let home_path = home_dir().expect("Wow, I didn't expect to be homeless!");
+    let _ = fs::create_dir_all(format!("{}/.config/jumper", home_path.to_str().unwrap()));
+    format!("{}/.config/jumper/db.sqlite", home_path.to_str().unwrap())
+}
 
 async fn save_current_path(store: &mut Store, name: Option<&str>) -> Res<()> {
     let current_dir = env::current_dir()?;
@@ -60,54 +66,56 @@ async fn save_current_path(store: &mut Store, name: Option<&str>) -> Res<()> {
     let save_name = name.unwrap_or(dir_name);
     let save_path = current_dir.to_str().unwrap();
     match store.save(save_name, save_path).await {
-        Ok(_) => {
-        },
-        Err(err) => {
-            match err.downcast_ref::<sqlx::error::Error>() {
-                Some(sqlx::error::Error::Database(db_err)) if db_err.is_unique_violation() => {
-                    println!("Name '{}' is already used for another path.", save_name);
-                },
-                Some(_) | None => {
-                    return Err(err);
-                }
+        Ok(_) => {}
+        Err(err) => match err.downcast_ref::<sqlx::error::Error>() {
+            Some(sqlx::error::Error::Database(db_err)) if db_err.is_unique_violation() => {
+                println!("Name '{}' is already used for another path.", save_name);
             }
-        }
+            Some(_) | None => {
+                return Err(err);
+            }
+        },
     }
-    return Ok(())
+    return Ok(());
 }
 
 async fn get_path(store: &mut Store, path_name: &str) -> Res<()> {
     match store.get(path_name).await {
         Ok(path) => {
             println!("{}", path);
-        },
-        Err(err) => {
-            match err.downcast_ref::<sqlx::error::Error>() {
-                Some(sqlx::error::Error::RowNotFound) => {
-                    return Err(anyhow!("Path '{}' not found.", path_name));
-                }
-                Some(_) | None => {
-                    return Err(err);
-                }
-            }
         }
+        Err(err) => match err.downcast_ref::<sqlx::error::Error>() {
+            Some(sqlx::error::Error::RowNotFound) => {
+                return Err(anyhow!("Path '{}' not found.", path_name));
+            }
+            Some(_) | None => {
+                return Err(err);
+            }
+        },
     };
 
-    return Ok(())
+    return Ok(());
 }
 
 async fn list_paths(store: &mut Store) -> Res<()> {
     let paths = store.list().await?;
 
-    let data: Vec<_> = paths.iter().map(|it| {
-        vec![
-            it.name.clone().cell()
-                .justify(Justify::Left)
-                .padding(Padding::builder().build()),
-            it.path.clone().cell()]
-    }).collect();
+    let data: Vec<_> = paths
+        .iter()
+        .map(|it| {
+            vec![
+                it.name
+                    .clone()
+                    .cell()
+                    .justify(Justify::Left)
+                    .padding(Padding::builder().build()),
+                it.path.clone().cell(),
+            ]
+        })
+        .collect();
 
-    let table = data.table()
+    let table = data
+        .table()
         .border(Border::builder().build())
         .separator(Separator::builder().build());
     let _ = print_stdout(table);
@@ -120,4 +128,3 @@ async fn remove_path(store: &mut Store, name: &str) -> Res<()> {
     println!("Entry removed.");
     Ok(())
 }
-
