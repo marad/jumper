@@ -1,6 +1,6 @@
 [package]
 name = "jumper"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Marcin Radoszewski <moriturius@gmail.com>"]
 description = "Jumper is command line utility to store and jump to folders on your system for blazingly fast workflow."
