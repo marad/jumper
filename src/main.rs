@@ -2,10 +2,6 @@ mod store;
 use crate::store::Store;
 use anyhow::anyhow;
 use clap::{Parser, Subcommand};
-use cli_table::{
-    format::{Border, Justify, Padding, Separator},
-    print_stdout, Cell, Table,
-};
 use home::home_dir;
 use std::env;
 use std::fs;
@@ -100,25 +96,15 @@ async fn get_path(store: &mut Store, path_name: &str) -> Res<()> {
 async fn list_paths(store: &mut Store) -> Res<()> {
     let paths = store.list().await?;
 
-    let data: Vec<_> = paths
+    let max_name_len = paths
         .iter()
-        .map(|it| {
-            vec![
-                it.name
-                    .clone()
-                    .cell()
-                    .justify(Justify::Left)
-                    .padding(Padding::builder().build()),
-                it.path.clone().cell(),
-            ]
-        })
-        .collect();
+        .max_by_key(|it| it.name.len())
+        .map(|it| it.name.len())
+        .unwrap_or(0);
 
-    let table = data
-        .table()
-        .border(Border::builder().build())
-        .separator(Separator::builder().build());
-    let _ = print_stdout(table);
+    for path in paths {
+        println!("{:<len$} | {}", path.name, path.path, len = max_name_len);
+    }
 
     Ok(())
 }
